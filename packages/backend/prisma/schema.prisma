@@ -1,0 +1,408 @@
+// Prisma Schema - ServcCand
+// Multi-tenant company management system with Instagram gamification
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// MULTI-EMPRESA
+// ============================================================
+
+model Company {
+  id          String   @id @default(uuid())
+  name        String
+  cnpj        String?  @unique
+  email       String?
+  phone       String?
+  address     String?
+  logoUrl     String?
+  isActive    Boolean  @default(true)
+  isAdmin     Boolean  @default(false) // empresa admin geral
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  profiles    Profile[]
+  users       User[]
+  persons     Person[]
+  regions     Region[]
+  missions    Mission[]
+  parameters  SalaryParameter?
+  instagramConfigs InstagramConfig[]
+
+  @@map("companies")
+}
+
+// ============================================================
+// PERFIS E PERMISSÕES
+// ============================================================
+
+model Profile {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  companyId   String
+  isSystem    Boolean  @default(false) // perfis padrão do sistema
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  permissions ProfilePermission[]
+  users       User[]
+
+  @@unique([companyId, name])
+  @@map("profiles")
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  name        String   @unique // ex: companies:read, persons:create
+  description String?
+  module      String   // companies, persons, missions, etc.
+  action      String   // read, create, update, delete, manage
+  createdAt   DateTime @default(now())
+
+  // Relations
+  profiles    ProfilePermission[]
+
+  @@map("permissions")
+}
+
+model ProfilePermission {
+  profileId    String
+  permissionId String
+  grantedAt    DateTime @default(now())
+
+  // Relations
+  profile      Profile    @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([profileId, permissionId])
+  @@map("profile_permissions")
+}
+
+// ============================================================
+// USUÁRIOS DO SISTEMA
+// ============================================================
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String
+  companyId   String
+  profileId   String
+  personId    String?  @unique // usuário pode ser vinculado a uma pessoa
+  isActive    Boolean  @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company     Company  @relation(fields: [companyId], references: [id])
+  profile     Profile  @relation(fields: [profileId], references: [id])
+  person      Person?  @relation(fields: [personId], references: [id])
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ============================================================
+// REGIÕES E LIDERANÇAS
+// ============================================================
+
+model Region {
+  id          String   @id @default(uuid())
+  name        String   // nome do bairro/região
+  description String?
+  companyId   String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaderships Leadership[]
+  persons     Person[]
+
+  @@unique([companyId, name])
+  @@map("regions")
+}
+
+model Leadership {
+  id          String   @id @default(uuid())
+  regionId    String
+  personId    String
+  isActive    Boolean  @default(true)
+  startDate   DateTime @default(now())
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  region      Region   @relation(fields: [regionId], references: [id], onDelete: Cascade)
+  person      Person   @relation(fields: [personId], references: [id])
+
+  @@map("leaderships")
+}
+
+// ============================================================
+// PESSOAS (FUNCIONÁRIOS)
+// ============================================================
+
+enum PersonRegistrationType {
+  PUBLIC    // cadastro aberto
+  INTERNAL  // cadastro interno pela liderança
+}
+
+enum PersonStatus {
+  PENDING   // aguardando validação
+  ACTIVE    // ativo
+  INACTIVE  // inativo
+  SUSPENDED // suspenso
+}
+
+model Person {
+  id              String   @id @default(uuid())
+  companyId       String
+  regionId        String?
+  registrationType PersonRegistrationType @default(PUBLIC)
+  status          PersonStatus  @default(PENDING)
+
+  // Dados básicos
+  firstName       String
+  lastName        String
+  cpf             String?  @unique
+  rg              String?
+  birthDate       DateTime?
+  email           String?
+  phone           String
+  whatsapp        String?
+
+  // Endereço
+  zipCode         String?
+  address         String?
+  number          String?
+  complement      String?
+  neighborhood    String?
+  city            String?
+  state           String?
+
+  // Instagram
+  instagramUsername String?
+  instagramId       String?
+
+  // Nivel e gamificação
+  level           Int      @default(1)
+  totalPoints     Int      @default(0)
+
+  // Documentos
+  photoUrl        String?
+
+  // Datas
+  registeredAt    DateTime @default(now())
+  activatedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  company         Company    @relation(fields: [companyId], references: [id])
+  region          Region?    @relation(fields: [regionId], references: [id])
+  user            User?
+  leaderships     Leadership[]
+  personMissions  PersonMission[]
+  instagramPosts  InstagramPost[]
+  weeklyPayments  WeeklyPayment[]
+
+  @@map("persons")
+}
+
+// ============================================================
+// MISSÕES SEMANAIS
+// ============================================================
+
+enum MissionType {
+  POST_PHOTO          // publicar foto
+  TAG_COMPANY         // marcar a empresa
+  COMMENT_POST        // comentar na publicação
+  SHARE_POST          // compartilhar publicação
+  REACH_FOLLOWERS     // atingir número de seguidores
+  CUSTOM              // missão customizada
+}
+
+model Mission {
+  id          String      @id @default(uuid())
+  companyId   String
+  name        String
+  description String?
+  type        MissionType
+  points      Int         @default(10)
+  rewardValue Decimal     @default(0.00) @db.Decimal(10, 2)
+  isRequired  Boolean     @default(false) // missão obrigatória para subir de nível
+  isActive    Boolean     @default(true)
+  metadata    Json?       // configurações extras (ex: número mínimo de seguidores)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  personMissions PersonMission[]
+
+  @@map("missions")
+}
+
+enum PersonMissionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+model PersonMission {
+  id          String   @id @default(uuid())
+  personId    String
+  missionId   String
+  weekNumber  Int      // número da semana no ano (1-52)
+  year        Int
+  status      PersonMissionStatus @default(PENDING)
+  completedAt DateTime?
+  evidence    String?  // URL da publicação/evidência
+  points      Int      @default(0)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  person      Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  mission     Mission  @relation(fields: [missionId], references: [id])
+
+  @@unique([personId, missionId, weekNumber, year])
+  @@map("person_missions")
+}
+
+// ============================================================
+// INSTAGRAM / AUTOMAÇÃO
+// ============================================================
+
+model InstagramConfig {
+  id              String   @id @default(uuid())
+  companyId       String   @unique
+  instagramAccountId String?
+  accessToken     String?
+  webhookVerifyToken String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("instagram_configs")
+}
+
+enum InstagramPostStatus {
+  DETECTED      // detectado pelo webhook
+  VALIDATING    // em processo de validação
+  VALIDATED     // validado com sucesso
+  FAILED        // falhou na validação
+}
+
+model InstagramPost {
+  id              String   @id @default(uuid())
+  personId        String
+  instagramPostId String   @unique // ID da publicação no Instagram
+  mediaUrl        String?
+  caption         String?
+  timestamp       DateTime
+  status          InstagramPostStatus @default(DETECTED)
+
+  // Validações
+  hasPhoto        Boolean  @default(false)
+  hasTag          Boolean  @default(false)  // marcou a empresa
+  hasComment      Boolean  @default(false)  // comentou
+  hasShare        Boolean  @default(false)  // compartilhou
+  likesCount      Int      @default(0)
+  commentsCount   Int      @default(0)
+
+  // Metadados
+  rawData         Json?    // dados brutos da API
+  validatedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  person          Person   @relation(fields: [personId], references: [id])
+
+  @@map("instagram_posts")
+}
+
+// ============================================================
+// SALÁRIO E PAGAMENTOS
+// ============================================================
+
+model SalaryParameter {
+  id                    String   @id @default(uuid())
+  companyId             String   @unique
+  monthlyBaseSalary     Decimal  @default(1000.00) @db.Decimal(10, 2)
+  weeklyAmount          Decimal  @default(250.00)  @db.Decimal(10, 2)
+  weeksPerMonth         Int      @default(4)
+  levelBonusPercentage  Decimal  @default(10.00)   @db.Decimal(5, 2) // % de bônus por nível
+  missionPointsToLevel  Int      @default(100) // pontos necessários para subir de nível
+  missionsRequiredPerWeek Int    @default(3)   // missões obrigatórias por semana
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("salary_parameters")
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+model WeeklyPayment {
+  id          String   @id @default(uuid())
+  personId    String
+  weekNumber  Int
+  year        Int
+  amount      Decimal  @db.Decimal(10, 2)
+  bonus       Decimal  @default(0) @db.Decimal(10, 2)
+  total       Decimal  @db.Decimal(10, 2)
+  status      PaymentStatus @default(PENDING)
+  missionsCompleted Int @default(0)
+  levelAtTime Int      @default(1)
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  person      Person   @relation(fields: [personId], references: [id])
+
+  @@unique([personId, weekNumber, year])
+  @@map("weekly_payments")
+}
