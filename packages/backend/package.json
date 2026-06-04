@@ -4,7 +4,7 @@
   "description": "ServcCand Backend API - NestJS",
   "private": true,
   "scripts": {
-    "prebuild": "rimraf dist",
+    "prebuild": "rimraf dist && prisma generate",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\"",
     "start": "nest start",
