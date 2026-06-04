@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+const API_URL = (import.meta as any).env.VITE_API_URL || 'http://localhost:3000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -39,9 +39,17 @@ api.interceptors.response.use(
         window.location.href = '/login';
       }
     }
-
     return Promise.reject(error.response?.data || error);
   },
 );
 
-export default api;
+export interface ApiClient {
+  get<T = any>(url: string, config?: any): Promise<T>;
+  post<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  put<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  patch<T = any>(url: string, data?: any, config?: any): Promise<T>;
+  delete<T = any>(url: string, config?: any): Promise<T>;
+  interceptors: any;
+}
+
+export default api as unknown as ApiClient;

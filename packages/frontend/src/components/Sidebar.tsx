@@ -14,7 +14,19 @@ interface NavItem {
   permission?: string;
 }
 
-const navSections = [
+interface NavItem {
+  to: string;
+  icon: React.ReactNode;
+  label: string;
+  permission?: string;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
   {
     title: 'Principal',
     items: [

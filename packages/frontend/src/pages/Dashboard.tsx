@@ -214,8 +214,12 @@ function EmployeeDashboard({ user }: { user: any }) {
   const nextLevelPoints = currentLevel * 100;
 
   const approvedPayments = (salaryData?.payments || [])
-    .filter((p: any) => p.status === 'APPROVED');
-  const saldoAReceber = approvedPayments.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
+    .filter((p: any) => p.status === 'APPROVED' || p.status === 'PENDING');
+  const totalAReceber = approvedPayments.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
+
+  const paidPayments = (salaryData?.payments || [])
+    .filter((p: any) => p.status === 'PAID');
+  const totalRecebido = paidPayments.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
 
   return (
     <div>
@@ -228,7 +232,7 @@ function EmployeeDashboard({ user }: { user: any }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h2 style={{ fontSize: '1.25rem', marginBottom: '0.25rem' }}>
-              👋 Olá, {user.person?.firstName}!
+              👋 Olá, {user.person?.firstName}! {user.person?.instagramUsername && `(@${user.person.instagramUsername})`}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
               Parabéns pelo seu trabalho na empresa {user.companyName}. Continue completando as missões!
@@ -246,42 +250,46 @@ function EmployeeDashboard({ user }: { user: any }) {
       {/* Overview Cards */}
       <div className="stats-grid" style={{ marginBottom: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
         <div className="stat-card">
-          <div className="stat-icon green"><DollarSign size={22} /></div>
+          <div className="stat-icon orange"><DollarSign size={22} /></div>
           <div className="stat-info">
-            <h3>R$ {saldoAReceber.toFixed(2)}</h3>
-            <p>Saldo a Receber</p>
-            <span className="stat-badge up" style={{ background: 'rgba(67, 233, 123, 0.1)', color: 'var(--accent)', fontSize: '0.75rem' }}>
+            <h3>R$ {totalAReceber.toFixed(2)}</h3>
+            <p>A Receber (Pendente)</p>
+            <span className="stat-badge up" style={{ background: 'rgba(247, 151, 30, 0.1)', color: 'var(--warning)', fontSize: '0.75rem' }}>
               Aguardando pagamento
             </span>
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon orange"><TrendingUp size={22} /></div>
+          <div className="stat-icon green"><DollarSign size={22} /></div>
           <div className="stat-info">
-            <h3>R$ {Number(salaryData?.currentWeek?.weeklyTotal || 0).toFixed(2)}</h3>
-            <p>Ganhos da Semana</p>
-            <span className="stat-badge up" style={{ background: 'rgba(247, 151, 30, 0.1)', color: 'var(--warning)', fontSize: '0.75rem' }}>
-              Base: R$ {Number(salaryData?.currentWeek?.weeklyBase || 0).toFixed(2)} + Bônus Nível: R$ {Number(salaryData?.currentWeek?.levelBonus || 0).toFixed(2)}
+            <h3>R$ {totalRecebido.toFixed(2)}</h3>
+            <p>Total Recebido (Pago)</p>
+            <span className="stat-badge up" style={{ background: 'rgba(67, 233, 123, 0.1)', color: 'var(--accent)', fontSize: '0.75rem' }}>
+              Pago com sucesso
             </span>
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon purple"><Award size={22} /></div>
+          <div className="stat-icon purple"><TrendingUp size={22} /></div>
           <div className="stat-info">
-            <h3>{totalPoints}</h3>
-            <p>Pontos Acumulados</p>
-            <span className="stat-badge up">Próximo nível: {nextLevelPoints} pts</span>
+            <h3>R$ {Number(salaryData?.currentWeek?.weeklyTotal || 0).toFixed(2)}</h3>
+            <p>Ganhos da Semana (Atual)</p>
+            <span className="stat-badge up" style={{ background: 'rgba(108, 99, 255, 0.1)', color: 'var(--primary-light)', fontSize: '0.75rem' }}>
+              Base: R$ {Number(salaryData?.currentWeek?.weeklyBase || 0).toFixed(2)} + Bônus: R$ {Number(salaryData?.currentWeek?.levelBonus || 0).toFixed(2)}
+            </span>
           </div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon pink"><Instagram size={22} /></div>
+          <div className="stat-icon pink"><Award size={22} /></div>
           <div className="stat-info">
-            <h3>{user.person?.instagramUsername ? `@${user.person.instagramUsername}` : 'Não configurado'}</h3>
-            <p>Instagram Vinculado</p>
-            <span className="stat-badge down">{user.person?.instagramUsername ? 'Monitorando' : 'Aguardando configuração'}</span>
+            <h3>{totalPoints}</h3>
+            <p>Pontos Acumulados</p>
+            <span className="stat-badge up" style={{ background: 'rgba(255, 101, 132, 0.1)', color: 'var(--secondary)', fontSize: '0.75rem' }}>
+              Próximo nível: {nextLevelPoints} pts
+            </span>
           </div>
         </div>
       </div>

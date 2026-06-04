@@ -107,7 +107,7 @@ function ProfileModal({ profile, permissions, companyId, onClose, onSuccess }: a
     setForm((f) => ({
       ...f,
       permissionIds: f.permissionIds.includes(permId)
-        ? f.permissionIds.filter((id) => id !== permId)
+        ? f.permissionIds.filter((id: string) => id !== permId)
         : [...f.permissionIds, permId],
     }));
   };
