@@ -67,6 +67,52 @@ export class CompaniesService {
       },
     });
 
+    // Auto-create default missions with default reward values (R$ 50.00)
+    const defaultMissions = [
+      {
+        name: 'Publicar Foto',
+        description: 'Publique uma foto no Instagram da empresa',
+        type: 'POST_PHOTO',
+        points: 25,
+        isRequired: true,
+        rewardValue: 50.00,
+      },
+      {
+        name: 'Marcar a Empresa',
+        description: 'Marque o perfil da empresa na publicação',
+        type: 'TAG_COMPANY',
+        points: 25,
+        isRequired: true,
+        rewardValue: 50.00,
+      },
+      {
+        name: 'Comentar na Publicação',
+        description: 'Faça um comentário na publicação da empresa',
+        type: 'COMMENT_POST',
+        points: 25,
+        isRequired: true,
+        rewardValue: 50.00,
+      },
+      {
+        name: 'Compartilhar Publicação',
+        description: 'Compartilhe a publicação da empresa',
+        type: 'SHARE_POST',
+        points: 25,
+        isRequired: false,
+        rewardValue: 50.00,
+      },
+    ];
+
+    for (const mission of defaultMissions) {
+      await this.prisma.mission.create({
+        data: {
+          companyId: company.id,
+          ...mission,
+          type: mission.type as any,
+        },
+      });
+    }
+
     return company;
   }
 

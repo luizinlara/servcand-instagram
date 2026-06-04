@@ -249,6 +249,7 @@ async function main() {
       type: 'POST_PHOTO',
       points: 25,
       isRequired: true,
+      rewardValue: 50.00,
     },
     {
       name: 'Marcar a Empresa',
@@ -256,6 +257,7 @@ async function main() {
       type: 'TAG_COMPANY',
       points: 25,
       isRequired: true,
+      rewardValue: 50.00,
     },
     {
       name: 'Comentar na Publicação',
@@ -263,6 +265,7 @@ async function main() {
       type: 'COMMENT_POST',
       points: 25,
       isRequired: true,
+      rewardValue: 50.00,
     },
     {
       name: 'Compartilhar Publicação',
@@ -270,6 +273,7 @@ async function main() {
       type: 'SHARE_POST',
       points: 25,
       isRequired: false,
+      rewardValue: 50.00,
     },
   ];
 
@@ -389,6 +393,23 @@ async function main() {
       },
     });
   }
+
+  // Create default missions for sample company
+  for (const mission of defaultMissions) {
+    const existing = await prisma.mission.findFirst({
+      where: { companyId: sampleCompany.id, type: mission.type as any },
+    });
+    if (!existing) {
+      await prisma.mission.create({
+        data: {
+          companyId: sampleCompany.id,
+          ...mission,
+          type: mission.type as any,
+        },
+      });
+    }
+  }
+
   console.log(`✅ Sample company created: ${sampleCompany.name}`);
 
   console.log('\n🎉 Seed completed successfully!\n');
