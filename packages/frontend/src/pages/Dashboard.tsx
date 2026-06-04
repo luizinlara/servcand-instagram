@@ -213,6 +213,10 @@ function EmployeeDashboard({ user }: { user: any }) {
   const totalPoints = salaryData?.person?.totalPoints || user.person?.totalPoints || 0;
   const nextLevelPoints = currentLevel * 100;
 
+  const approvedPayments = (salaryData?.payments || [])
+    .filter((p: any) => p.status === 'APPROVED');
+  const saldoAReceber = approvedPayments.reduce((sum: number, p: any) => sum + Number(p.total || 0), 0);
+
   return (
     <div>
       {/* Welcome Banner */}
@@ -240,24 +244,35 @@ function EmployeeDashboard({ user }: { user: any }) {
       </div>
 
       {/* Overview Cards */}
-      <div className="stats-grid" style={{ marginBottom: '1.5rem' }}>
+      <div className="stats-grid" style={{ marginBottom: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <div className="stat-card">
+          <div className="stat-icon green"><DollarSign size={22} /></div>
+          <div className="stat-info">
+            <h3>R$ {saldoAReceber.toFixed(2)}</h3>
+            <p>Saldo a Receber</p>
+            <span className="stat-badge up" style={{ background: 'rgba(67, 233, 123, 0.1)', color: 'var(--accent)', fontSize: '0.75rem' }}>
+              Aguardando pagamento
+            </span>
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon orange"><TrendingUp size={22} /></div>
+          <div className="stat-info">
+            <h3>R$ {Number(salaryData?.currentWeek?.weeklyTotal || 0).toFixed(2)}</h3>
+            <p>Ganhos da Semana</p>
+            <span className="stat-badge up" style={{ background: 'rgba(247, 151, 30, 0.1)', color: 'var(--warning)', fontSize: '0.75rem' }}>
+              Base: R$ {Number(salaryData?.currentWeek?.weeklyBase || 0).toFixed(2)} + Bônus Nível: R$ {Number(salaryData?.currentWeek?.levelBonus || 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+
         <div className="stat-card">
           <div className="stat-icon purple"><Award size={22} /></div>
           <div className="stat-info">
             <h3>{totalPoints}</h3>
             <p>Pontos Acumulados</p>
             <span className="stat-badge up">Próximo nível: {nextLevelPoints} pts</span>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-icon green"><DollarSign size={22} /></div>
-          <div className="stat-info">
-            <h3>R$ {Number(salaryData?.currentWeek?.weeklyTotal || 0).toFixed(2)}</h3>
-            <p>Ganhos da Semana</p>
-            <span className="stat-badge up" style={{ background: 'rgba(67, 233, 123, 0.1)', color: 'var(--accent)', fontSize: '0.75rem' }}>
-              Base: R$ {Number(salaryData?.currentWeek?.weeklyBase || 0).toFixed(2)} + Bônus Nível: R$ {Number(salaryData?.currentWeek?.levelBonus || 0).toFixed(2)}
-            </span>
           </div>
         </div>
 
