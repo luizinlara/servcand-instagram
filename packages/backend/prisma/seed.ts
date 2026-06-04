@@ -464,7 +464,145 @@ async function main() {
     },
   });
 
-  console.log(`✅ Sample company created: ${sampleCompany.name}`);
+  // Calculate current week number
+  const getWeekNumber = (d: Date) => {
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  };
+  const now = new Date();
+  const weekNum = getWeekNumber(now);
+  const yr = now.getFullYear();
+
+  // Create sample weekly payments for Luis Lara to populate history
+  const prevWeek = weekNum - 1 === 0 ? 52 : weekNum - 1;
+  const prevYear = weekNum - 1 === 0 ? yr - 1 : yr;
+
+  await prisma.weeklyPayment.upsert({
+    where: {
+      personId_weekNumber_year: {
+        personId: luisPerson.id,
+        weekNumber: prevWeek,
+        year: prevYear,
+      },
+    },
+    update: {},
+    create: {
+      personId: luisPerson.id,
+      weekNumber: prevWeek,
+      year: prevYear,
+      missionsCompleted: 3,
+      amount: 150.00,
+      bonus: 0.00,
+      total: 150.00,
+      status: 'PAID',
+      paidAt: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  await prisma.weeklyPayment.upsert({
+    where: {
+      personId_weekNumber_year: {
+        personId: luisPerson.id,
+        weekNumber: weekNum,
+        year: yr,
+      },
+    },
+    update: {},
+    create: {
+      personId: luisPerson.id,
+      weekNumber: weekNum,
+      year: yr,
+      missionsCompleted: 2,
+      amount: 100.00,
+      bonus: 0.00,
+      total: 100.00,
+      status: 'APPROVED',
+    },
+  });
+
+  // Complete some sample missions for Luis Lara for current week
+  const sampleMissions = await prisma.mission.findMany({
+    where: { companyId: sampleCompany.id },
+  });
+
+  if (sampleMissions.length >= 3) {
+    // Mission 1: COMPLETED
+    await prisma.personMission.upsert({
+      where: {
+        personId_missionId_weekNumber_year: {
+          personId: luisPerson.id,
+          missionId: sampleMissions[0].id,
+          weekNumber: weekNum,
+          year: yr,
+        },
+      },
+      update: {},
+      create: {
+        personId: luisPerson.id,
+        missionId: sampleMissions[0].id,
+        weekNumber: weekNum,
+        year: yr,
+        status: 'COMPLETED',
+        completedAt: now,
+        points: sampleMissions[0].points,
+      },
+    });
+
+    // Mission 2: COMPLETED
+    await prisma.personMission.upsert({
+      where: {
+        personId_missionId_weekNumber_year: {
+          personId: luisPerson.id,
+          missionId: sampleMissions[1].id,
+          weekNumber: weekNum,
+          year: yr,
+        },
+      },
+      update: {},
+      create: {
+        personId: luisPerson.id,
+        missionId: sampleMissions[1].id,
+        weekNumber: weekNum,
+        year: yr,
+        status: 'COMPLETED',
+        completedAt: now,
+        points: sampleMissions[1].points,
+      },
+    });
+
+    // Mission 3: PENDING
+    await prisma.personMission.upsert({
+      where: {
+        personId_missionId_weekNumber_year: {
+          personId: luisPerson.id,
+          missionId: sampleMissions[2].id,
+          weekNumber: weekNum,
+          year: yr,
+        },
+      },
+      update: {},
+      create: {
+        personId: luisPerson.id,
+        missionId: sampleMissions[2].id,
+        weekNumber: weekNum,
+        year: yr,
+        status: 'PENDING',
+        points: 0,
+      },
+    });
+
+    // Update person points
+    const pointsSum = sampleMissions[0].points + sampleMissions[1].points;
+    await prisma.person.update({
+      where: { id: luisPerson.id },
+      data: { totalPoints: pointsSum },
+    });
+  }
+
+  console.log(`... Sample company created: ${sampleCompany.name}`);
   console.log(`✅ Employee user created: luis@servcand.com.br / Luis@123`);
 
   console.log('\n🎉 Seed completed successfully!\n');
