@@ -410,12 +410,68 @@ async function main() {
     }
   }
 
+  // Create employee person Luis Lara
+  const sampleRegion = await prisma.region.findFirst({
+    where: { companyId: sampleCompany.id, name: 'Centro' },
+  });
+
+  const sampleEmployeeProfile = await prisma.profile.findFirst({
+    where: { companyId: sampleCompany.id, name: 'EMPLOYEE' },
+  });
+
+  const luisPerson = await prisma.person.upsert({
+    where: { cpf: '05479486110' },
+    update: {
+      companyId: sampleCompany.id,
+      regionId: sampleRegion?.id,
+      firstName: 'Luis',
+      lastName: 'Lara',
+      phone: '65993362396',
+      status: 'ACTIVE',
+      instagramUsername: 'luizinlara',
+      activatedAt: new Date(),
+    },
+    create: {
+      companyId: sampleCompany.id,
+      regionId: sampleRegion?.id,
+      firstName: 'Luis',
+      lastName: 'Lara',
+      phone: '65993362396',
+      cpf: '05479486110',
+      status: 'ACTIVE',
+      registrationType: 'INTERNAL',
+      instagramUsername: 'luizinlara',
+      activatedAt: new Date(),
+    },
+  });
+
+  const employeePassword = await bcrypt.hash('Luis@123', 12);
+  await prisma.user.upsert({
+    where: { email: 'luis@servcand.com.br' },
+    update: {
+      companyId: sampleCompany.id,
+      profileId: sampleEmployeeProfile!.id,
+      personId: luisPerson.id,
+      isActive: true,
+    },
+    create: {
+      email: 'luis@servcand.com.br',
+      password: employeePassword,
+      companyId: sampleCompany.id,
+      profileId: sampleEmployeeProfile!.id,
+      personId: luisPerson.id,
+      isActive: true,
+    },
+  });
+
   console.log(`✅ Sample company created: ${sampleCompany.name}`);
+  console.log(`✅ Employee user created: luis@servcand.com.br / Luis@123`);
 
   console.log('\n🎉 Seed completed successfully!\n');
   console.log('📝 Login credentials:');
   console.log('   Super Admin: admin@servcand.com / Admin@123');
   console.log('   Company Admin: admin@empresaexemplo.com / Empresa@123');
+  console.log('   Employee: luis@servcand.com.br / Luis@123');
 }
 
 main()
