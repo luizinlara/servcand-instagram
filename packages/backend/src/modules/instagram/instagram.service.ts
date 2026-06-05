@@ -1,5 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import axios from 'axios';
+
 
 @Injectable()
 export class InstagramService {
@@ -208,6 +210,94 @@ export class InstagramService {
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
+  }
+
+  async validatePostsAgainstMeta(personId: string, weekNumber: number, year: number) {
+    const person = await this.prisma.person.findUnique({ where: { id: personId } });
+    if (!person) return;
+
+    const config = await this.prisma.instagramConfig.findUnique({
+      where: { companyId: person.companyId },
+    });
+    if (!config || !config.accessToken || !config.isActive) {
+      this.logger.warn(`No active Instagram config found for company ${person.companyId}`);
+      return;
+    }
+
+    const completedMissions = await this.prisma.personMission.findMany({
+      where: {
+        personId,
+        weekNumber,
+        year,
+        status: 'COMPLETED',
+      },
+      include: { mission: true },
+    });
+
+    for (const pm of completedMissions) {
+      let postField: keyof any = 'hasPhoto';
+      if (pm.mission.type === 'POST_PHOTO') postField = 'hasPhoto';
+      else if (pm.mission.type === 'TAG_COMPANY') postField = 'hasTag';
+      else if (pm.mission.type === 'COMMENT_POST') postField = 'hasComment';
+      else if (pm.mission.type === 'SHARE_POST') postField = 'hasShare';
+
+      const post = await this.prisma.instagramPost.findFirst({
+        where: {
+          personId,
+          [postField]: true,
+          status: { in: ['VALIDATING', 'VALIDATED'] },
+        },
+        orderBy: { timestamp: 'desc' },
+      });
+
+      if (!post) continue;
+
+      if (post.instagramPostId.startsWith('manual-')) {
+        if (post.status !== 'VALIDATED') {
+          await this.prisma.instagramPost.update({
+            where: { id: post.id },
+            data: { status: 'VALIDATED' },
+          });
+        }
+        continue;
+      }
+
+      const url = `https://graph.facebook.com/v19.0/${post.instagramPostId}?fields=id,media_type,media_url,caption&access_token=${config.accessToken}`;
+      try {
+        const response = await axios.get(url);
+        const metaData = response.data;
+
+        await this.prisma.instagramPost.update({
+          where: { id: post.id },
+          data: {
+            status: 'VALIDATED',
+            rawData: metaData,
+            mediaUrl: metaData.media_url || post.mediaUrl,
+            caption: metaData.caption || post.caption,
+          },
+        });
+      } catch (err: any) {
+        this.logger.warn(`Failed to validate post ${post.instagramPostId} via Meta API: ${err.message}`);
+
+        await this.prisma.instagramPost.update({
+          where: { id: post.id },
+          data: { status: 'FAILED' },
+        });
+
+        await this.prisma.personMission.update({
+          where: { id: pm.id },
+          data: {
+            status: 'PENDING',
+            notes: `Inválido na API da Meta: ${err.message || 'Post não encontrado ou deletado'}`,
+          },
+        });
+
+        await this.prisma.person.update({
+          where: { id: personId },
+          data: { totalPoints: { decrement: pm.points } },
+        });
+      }
+    }
   }
 
   private getWeekNumber(date: Date): number {

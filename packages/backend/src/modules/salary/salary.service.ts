@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { InstagramService } from '../instagram/instagram.service';
 
 @Injectable()
 export class SalaryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly instagramService: InstagramService,
+  ) {}
 
   async getPersonSalary(personId: string) {
     const person = await this.prisma.person.findUnique({ where: { id: personId } });
@@ -64,6 +68,12 @@ export class SalaryService {
   }
 
   async generateWeeklyPayment(personId: string, weekNumber: number, year: number) {
+    try {
+      await this.instagramService.validatePostsAgainstMeta(personId, Number(weekNumber), Number(year));
+    } catch (err: any) {
+      console.error(`Meta API validation failed during salary calculation for person ${personId}:`, err.message);
+    }
+
     const person = await this.prisma.person.findUnique({ where: { id: personId } });
     if (!person) throw new NotFoundException('Person not found');
 
