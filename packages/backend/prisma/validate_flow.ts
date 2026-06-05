@@ -37,6 +37,90 @@ async function runValidation() {
   const week = getWeekNumber(now);
   const yr = now.getFullYear();
 
+  // Set up E2E test database state: 2 completed missions, 1 pending mission
+  const companyMissions = await prisma.mission.findMany({
+    where: { companyId: person.companyId }
+  });
+
+  if (companyMissions.length >= 3) {
+    // Mission 1: COMPLETED
+    await prisma.personMission.upsert({
+      where: {
+        personId_missionId_weekNumber_year: {
+          personId: person.id,
+          missionId: companyMissions[0].id,
+          weekNumber: week,
+          year: yr,
+        },
+      },
+      update: {
+        status: PersonMissionStatus.COMPLETED,
+        completedAt: now,
+        points: companyMissions[0].points,
+      },
+      create: {
+        personId: person.id,
+        missionId: companyMissions[0].id,
+        weekNumber: week,
+        year: yr,
+        status: PersonMissionStatus.COMPLETED,
+        completedAt: now,
+        points: companyMissions[0].points,
+      },
+    });
+
+    // Mission 2: COMPLETED
+    await prisma.personMission.upsert({
+      where: {
+        personId_missionId_weekNumber_year: {
+          personId: person.id,
+          missionId: companyMissions[1].id,
+          weekNumber: week,
+          year: yr,
+        },
+      },
+      update: {
+        status: PersonMissionStatus.COMPLETED,
+        completedAt: now,
+        points: companyMissions[1].points,
+      },
+      create: {
+        personId: person.id,
+        missionId: companyMissions[1].id,
+        weekNumber: week,
+        year: yr,
+        status: PersonMissionStatus.COMPLETED,
+        completedAt: now,
+        points: companyMissions[1].points,
+      },
+    });
+
+    // Mission 3: PENDING
+    await prisma.personMission.upsert({
+      where: {
+        personId_missionId_weekNumber_year: {
+          personId: person.id,
+          missionId: companyMissions[2].id,
+          weekNumber: week,
+          year: yr,
+        },
+      },
+      update: {
+        status: PersonMissionStatus.PENDING,
+        completedAt: null,
+        points: 0,
+      },
+      create: {
+        personId: person.id,
+        missionId: companyMissions[2].id,
+        weekNumber: week,
+        year: yr,
+        status: PersonMissionStatus.PENDING,
+        points: 0,
+      },
+    });
+  }
+
   // 2. Read current completed missions
   let completedMissions = await prisma.personMission.findMany({
     where: { personId: person.id, weekNumber: week, year: yr, status: PersonMissionStatus.COMPLETED },
