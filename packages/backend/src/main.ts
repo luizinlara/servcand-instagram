@@ -3,9 +3,13 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { ExpressAdapter } from '@nestjs/platform-express';
+import express from 'express';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+const server = express();
+
+export async function bootstrap() {
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     logger: ['error', 'warn', 'log', 'debug'],
   });
 
@@ -61,11 +65,26 @@ async function bootstrap() {
     swaggerOptions: { persistAuthorization: true },
   });
 
-  const port = process.env.PORT || 3000;
-  await app.listen(port);
-
-  logger.log(`🚀 Application running on port ${port}`);
-  logger.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
+  await app.init();
+  return { app, logger };
 }
 
-bootstrap();
+// Dev/Docker standalone start
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  bootstrap().then(async ({ app, logger }) => {
+    const port = process.env.PORT || 3000;
+    await app.listen(port);
+    logger.log(`🚀 Application running on port ${port}`);
+    logger.log(`📚 Swagger docs at http://localhost:${port}/api/docs`);
+  });
+}
+
+// Serverless export for Vercel
+let cachedHandler: any;
+export default async (req: any, res: any) => {
+  if (!cachedHandler) {
+    await bootstrap();
+    cachedHandler = server;
+  }
+  return cachedHandler(req, res);
+};
