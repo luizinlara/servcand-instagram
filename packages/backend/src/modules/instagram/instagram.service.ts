@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import axios from 'axios';
+import * as fs from 'fs';
+import * as path from 'path';
 
 
 @Injectable()
@@ -78,8 +80,48 @@ export class InstagramService {
     this.logger.log(`Handling story insight: ${JSON.stringify(data)}`);
   }
 
+  private async downloadAndSavePhoto(mediaUrl: string, postId: string): Promise<string> {
+    if (!mediaUrl) return mediaUrl;
+
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+    if (mediaUrl.startsWith(backendUrl) || mediaUrl.startsWith('/uploads')) {
+      return mediaUrl;
+    }
+
+    try {
+      const response = await axios({
+        url: mediaUrl,
+        method: 'GET',
+        responseType: 'arraybuffer',
+        timeout: 15000,
+      });
+
+      const instagramDir = path.join(process.cwd(), 'uploads', 'instagram');
+      if (!fs.existsSync(instagramDir)) {
+        fs.mkdirSync(instagramDir, { recursive: true });
+      }
+
+      const extension = mediaUrl.includes('.png') ? 'png' : 'jpg';
+      const fileName = `${postId}.${extension}`;
+      const filePath = path.join(instagramDir, fileName);
+
+      fs.writeFileSync(filePath, response.data);
+      this.logger.log(`Photo downloaded and saved locally for post ${postId}`);
+
+      return `${backendUrl}/uploads/instagram/${fileName}`;
+    } catch (err: any) {
+      this.logger.error(`Failed to download photo from ${mediaUrl}: ${err.message}`);
+      return mediaUrl;
+    }
+  }
+
   private async upsertInstagramPost(personId: string, data: any, updates: any) {
     const postId = data.media_id || data.id || `manual-${Date.now()}`;
+
+    let localMediaUrl = data.media_url || null;
+    if (localMediaUrl) {
+      localMediaUrl = await this.downloadAndSavePhoto(localMediaUrl, postId);
+    }
 
     const existing = await this.prisma.instagramPost.findFirst({
       where: { instagramPostId: postId, personId },
@@ -88,7 +130,11 @@ export class InstagramService {
     if (existing) {
       await this.prisma.instagramPost.update({
         where: { id: existing.id },
-        data: { ...updates, status: 'VALIDATING' },
+        data: {
+          ...updates,
+          mediaUrl: localMediaUrl || existing.mediaUrl,
+          status: 'VALIDATING',
+        },
       });
     } else {
       await this.prisma.instagramPost.create({
@@ -99,6 +145,7 @@ export class InstagramService {
           rawData: data,
           status: 'VALIDATING',
           hasPhoto: true,
+          mediaUrl: localMediaUrl,
           ...updates,
         },
       });
@@ -267,14 +314,24 @@ export class InstagramService {
         const response = await axios.get(url);
         const metaData = response.data;
 
+        let localMediaUrl = metaData.media_url || post.mediaUrl;
+        if (localMediaUrl && (metaData.media_type === 'IMAGE' || metaData.media_type === 'CAROUSEL_ALBUM' || !metaData.media_type)) {
+          localMediaUrl = await this.downloadAndSavePhoto(localMediaUrl, post.instagramPostId);
+        }
+
         await this.prisma.instagramPost.update({
           where: { id: post.id },
           data: {
             status: 'VALIDATED',
             rawData: metaData,
-            mediaUrl: metaData.media_url || post.mediaUrl,
+            mediaUrl: localMediaUrl,
             caption: metaData.caption || post.caption,
           },
+        });
+
+        await this.prisma.personMission.update({
+          where: { id: pm.id },
+          data: { evidence: localMediaUrl },
         });
       } catch (err: any) {
         this.logger.warn(`Failed to validate post ${post.instagramPostId} via Meta API: ${err.message}`);

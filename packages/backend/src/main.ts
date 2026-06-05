@@ -5,6 +5,8 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import express from 'express';
+import { existsSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
 const server = express();
 
@@ -17,6 +19,13 @@ export async function bootstrap() {
 
   // Global prefix
   app.setGlobalPrefix('api');
+
+  // Serve static uploads
+  const uploadsDir = join(process.cwd(), 'uploads');
+  if (!existsSync(uploadsDir)) {
+    mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
 
   // CORS
   const allowedOrigins = [
