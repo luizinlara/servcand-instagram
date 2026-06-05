@@ -18,8 +18,19 @@ export class InstagramService {
   }
 
   // Handle incoming webhook events from Instagram/Meta
-  async handleWebhook(body: any) {
+  async handleWebhook(body: any, headers?: any) {
     this.logger.log(`Webhook received: ${JSON.stringify(body)}`);
+
+    try {
+      await this.prisma.instagramWebhookLog.create({
+        data: {
+          payload: body,
+          headers: headers ? headers : {},
+        },
+      });
+    } catch (err) {
+      this.logger.error(`Failed to save webhook log: ${err.message}`);
+    }
 
     if (body.object === 'instagram') {
       for (const entry of body.entry || []) {
@@ -189,6 +200,13 @@ export class InstagramService {
       where: { companyId },
       update: config,
       create: { companyId, ...config },
+    });
+  }
+
+  async getWebhookLogs(limit: number = 50) {
+    return this.prisma.instagramWebhookLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: limit,
     });
   }
 

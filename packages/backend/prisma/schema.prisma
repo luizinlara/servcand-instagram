@@ -406,3 +406,13 @@ model WeeklyPayment {
   @@unique([personId, weekNumber, year])
   @@map("weekly_payments")
 }
+
+model InstagramWebhookLog {
+  id        String   @id @default(uuid())
+  payload   Json
+  headers   Json?
+  createdAt DateTime @default(now())
+
+  @@map("instagram_webhook_logs")
+}
+

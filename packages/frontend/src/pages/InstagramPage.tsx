@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { instagramService, personsService } from '../services';
-import { Instagram, Plus, CheckCircle } from 'lucide-react';
+import { Instagram, Plus, CheckCircle, RefreshCw, Eye, Terminal } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function InstagramPage() {
@@ -10,6 +10,8 @@ export default function InstagramPage() {
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [showPostModal, setShowPostModal] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts' | 'logs'>('posts');
+  const [selectedLogPayload, setSelectedLogPayload] = useState<any | null>(null);
 
   const { data: persons = [] } = useQuery({
     queryKey: ['persons', 'active'],
@@ -19,7 +21,7 @@ export default function InstagramPage() {
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['instagram-posts', selectedPersonId],
     queryFn: () => instagramService.getPostsByPerson(selectedPersonId),
-    enabled: !!selectedPersonId,
+    enabled: !!selectedPersonId && activeTab === 'posts',
   });
 
   const { data: config } = useQuery({
@@ -27,15 +29,46 @@ export default function InstagramPage() {
     queryFn: () => instagramService.getConfig(),
   });
 
+  const { data: logs = [], isLoading: isLoadingLogs, refetch: refetchLogs } = useQuery({
+    queryKey: ['instagram-logs'],
+    queryFn: () => instagramService.getLogs(),
+    enabled: activeTab === 'logs',
+    refetchInterval: activeTab === 'logs' ? 5000 : false,
+  });
+
+  const getLogDetails = (payload: any) => {
+    if (!payload) return 'Sem payload';
+    if (payload.object === 'instagram') {
+      const changes: string[] = [];
+      payload.entry?.forEach((entry: any) => {
+        entry.changes?.forEach((change: any) => {
+          changes.push(`${change.field} (${change.value?.username || change.value?.from?.username || 'desconhecido'})`);
+        });
+      });
+      return changes.length > 0 ? `Instagram: ${changes.join(', ')}` : 'Evento Instagram';
+    }
+    if (payload['hub.challenge']) {
+      return `Validação de Webhook (Desafio: ${payload['hub.challenge']})`;
+    }
+    return JSON.stringify(payload).substring(0, 60) + '...';
+  };
+
   return (
     <div>
       <div className="page-header">
         <div><h2>Monitoramento Instagram</h2><p>Acompanhe publicações e validação de missões</p></div>
-        {hasPermission('instagram:manage') && (
-          <button id="btn-add-post" className="btn btn-primary" onClick={() => setShowPostModal(true)}>
-            <Plus size={16} /> Registrar Post Manual
-          </button>
-        )}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {activeTab === 'posts' && hasPermission('instagram:manage') && (
+            <button id="btn-add-post" className="btn btn-primary" onClick={() => setShowPostModal(true)}>
+              <Plus size={16} /> Registrar Post Manual
+            </button>
+          )}
+          {activeTab === 'logs' && (
+            <button className="btn btn-secondary" onClick={() => refetchLogs()}>
+              <RefreshCw size={16} /> Atualizar Logs
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Config Banner */}
@@ -75,64 +108,136 @@ export default function InstagramPage() {
         </div>
       )}
 
-      {/* Person Selector */}
-      <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-          <label className="form-label" style={{ margin: 0, whiteSpace: 'nowrap' }}>Selecionar Pessoa:</label>
-          <select
-            className="form-control"
-            style={{ maxWidth: 300 }}
-            value={selectedPersonId}
-            onChange={(e) => setSelectedPersonId(e.target.value)}
-          >
-            <option value="">Selecione uma pessoa...</option>
-            {(persons as any[]).map((p: any) => (
-              <option key={p.id} value={p.id}>{p.firstName} {p.lastName} {p.instagramUsername ? `(@${p.instagramUsername})` : ''}</option>
-            ))}
-          </select>
-        </div>
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        <button
+          className="btn"
+          onClick={() => setActiveTab('posts')}
+          style={{
+            background: activeTab === 'posts' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'posts' ? 'white' : 'var(--text-muted)',
+            border: activeTab === 'posts' ? 'none' : '1px solid var(--border)',
+            fontWeight: 500,
+            padding: '0.5rem 1rem'
+          }}
+        >
+          <Instagram size={14} style={{ marginRight: '0.35rem', verticalAlign: 'middle' }} />
+          Publicações
+        </button>
+        <button
+          className="btn"
+          onClick={() => setActiveTab('logs')}
+          style={{
+            background: activeTab === 'logs' ? 'var(--primary)' : 'transparent',
+            color: activeTab === 'logs' ? 'white' : 'var(--text-muted)',
+            border: activeTab === 'logs' ? 'none' : '1px solid var(--border)',
+            fontWeight: 500,
+            padding: '0.5rem 1rem'
+          }}
+        >
+          <Terminal size={14} style={{ marginRight: '0.35rem', verticalAlign: 'middle' }} />
+          Logs do Webhook
+        </button>
       </div>
 
-      {/* Posts */}
-      {!selectedPersonId ? (
-        <div className="empty-state card">
-          <Instagram size={48} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
-          <h3>Selecione uma pessoa para ver as publicações</h3>
-        </div>
+      {activeTab === 'posts' ? (
+        <>
+          {/* Person Selector */}
+          <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+              <label className="form-label" style={{ margin: 0, whiteSpace: 'nowrap' }}>Selecionar Pessoa:</label>
+              <select
+                className="form-control"
+                style={{ maxWidth: 300 }}
+                value={selectedPersonId}
+                onChange={(e) => setSelectedPersonId(e.target.value)}
+              >
+                <option value="">Selecione uma pessoa...</option>
+                {(persons as any[]).map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.firstName} {p.lastName} {p.instagramUsername ? `(@${p.instagramUsername})` : ''}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Posts */}
+          {!selectedPersonId ? (
+            <div className="empty-state card">
+              <Instagram size={48} style={{ margin: '0 auto 1rem', opacity: 0.3 }} />
+              <h3>Selecione uma pessoa para ver as publicações</h3>
+            </div>
+          ) : (
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Post ID</th>
+                    <th>Data</th>
+                    <th>Foto</th>
+                    <th>Marcou</th>
+                    <th>Comentou</th>
+                    <th>Compartilhou</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem' }}><div className="loading-spinner" /></td></tr>
+                  ) : (posts as any[]).length === 0 ? (
+                    <tr><td colSpan={7}><div className="empty-state"><h3>Nenhum post registrado</h3></div></td></tr>
+                  ) : (posts as any[]).map((post: any) => (
+                    <tr key={post.id}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{post.instagramPostId}</td>
+                      <td>{new Date(post.timestamp).toLocaleDateString('pt-BR')}</td>
+                      <td>{post.hasPhoto ? '✅' : '❌'}</td>
+                      <td>{post.hasTag ? '✅' : '❌'}</td>
+                      <td>{post.hasComment ? '✅' : '❌'}</td>
+                      <td>{post.hasShare ? '✅' : '❌'}</td>
+                      <td>
+                        <span className={`badge ${
+                          post.status === 'VALIDATED' ? 'badge-active' :
+                          post.status === 'VALIDATING' ? 'badge-pending' : 'badge-inactive'
+                        }`}>
+                          {post.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       ) : (
+        /* Logs Tab */
         <div className="table-container">
           <table className="table">
             <thead>
               <tr>
-                <th>Post ID</th>
-                <th>Data</th>
-                <th>Foto</th>
-                <th>Marcou</th>
-                <th>Comentou</th>
-                <th>Compartilhou</th>
-                <th>Status</th>
+                <th>Data/Hora</th>
+                <th>Detalhes do Evento</th>
+                <th style={{ width: '100px', textAlign: 'center' }}>Ações</th>
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                <tr><td colSpan={7} style={{ textAlign: 'center', padding: '2rem' }}><div className="loading-spinner" /></td></tr>
-              ) : (posts as any[]).length === 0 ? (
-                <tr><td colSpan={7}><div className="empty-state"><h3>Nenhum post registrado</h3></div></td></tr>
-              ) : (posts as any[]).map((post: any) => (
-                <tr key={post.id}>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>{post.instagramPostId}</td>
-                  <td>{new Date(post.timestamp).toLocaleDateString('pt-BR')}</td>
-                  <td>{post.hasPhoto ? '✅' : '❌'}</td>
-                  <td>{post.hasTag ? '✅' : '❌'}</td>
-                  <td>{post.hasComment ? '✅' : '❌'}</td>
-                  <td>{post.hasShare ? '✅' : '❌'}</td>
-                  <td>
-                    <span className={`badge ${
-                      post.status === 'VALIDATED' ? 'badge-active' :
-                      post.status === 'VALIDATING' ? 'badge-pending' : 'badge-inactive'
-                    }`}>
-                      {post.status}
-                    </span>
+              {isLoadingLogs ? (
+                <tr><td colSpan={3} style={{ textAlign: 'center', padding: '2rem' }}><div className="loading-spinner" /></td></tr>
+              ) : (logs as any[]).length === 0 ? (
+                <tr><td colSpan={3}><div className="empty-state"><h3>Nenhum webhook recebido recentemente</h3><p>Os payloads enviados pelo Meta/Instagram aparecerão aqui em tempo real.</p></div></td></tr>
+              ) : (logs as any[]).map((log: any) => (
+                <tr key={log.id}>
+                  <td style={{ whiteSpace: 'nowrap' }}>{new Date(log.createdAt).toLocaleString('pt-BR')}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>
+                    {getLogDetails(log.payload)}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                      onClick={() => setSelectedLogPayload(log.payload)}
+                    >
+                      <Eye size={12} /> Ver JSON
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -154,6 +259,13 @@ export default function InstagramPage() {
           config={config}
           onClose={() => setShowConfigModal(false)}
           onSuccess={() => { setShowConfigModal(false); qc.invalidateQueries({ queryKey: ['instagram-config'] }); }}
+        />
+      )}
+
+      {selectedLogPayload && (
+        <JSONModal
+          payload={selectedLogPayload}
+          onClose={() => setSelectedLogPayload(null)}
         />
       )}
     </div>
@@ -299,6 +411,36 @@ function ManualPostModal({ persons, onClose, onSuccess }: any) {
             <button type="submit" className="btn btn-primary" disabled={isLoading}>{isLoading ? 'Registrando...' : 'Registrar e Validar'}</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function JSONModal({ payload, onClose }: { payload: any; onClose: () => void }) {
+  return (
+    <div className="modal-overlay">
+      <div className="modal" style={{ maxWidth: '600px', width: '90%' }}>
+        <div className="modal-header">
+          <h2>Conteúdo do Webhook</h2>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+          <pre style={{
+            background: 'var(--bg-elevated)',
+            padding: '1rem',
+            borderRadius: '6px',
+            fontFamily: 'monospace',
+            fontSize: '0.8rem',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-all',
+            color: 'var(--text-secondary)'
+          }}>
+            {JSON.stringify(payload, null, 2)}
+          </pre>
+        </div>
+        <div className="modal-footer">
+          <button className="btn btn-primary" onClick={onClose}>Fechar</button>
+        </div>
       </div>
     </div>
   );

@@ -83,6 +83,7 @@ export const instagramService = {
   updateConfig: (data: any) => api.put<any>('/instagram/config', data),
   validatePost: (personId: string, postId: string) =>
     api.post(`/instagram/validate/${personId}/${postId}`),
+  getLogs: () => api.get<any[]>('/instagram/logs'),
 };
 
 export const salaryService = {

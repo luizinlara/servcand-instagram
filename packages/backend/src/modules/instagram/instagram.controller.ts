@@ -34,8 +34,17 @@ export class InstagramController {
 
   @Post('webhook')
   @ApiOperation({ summary: 'Receber eventos do Instagram (POST)' })
-  handleWebhook(@Body() body: any) {
-    return this.service.handleWebhook(body);
+  handleWebhook(@Body() body: any, @Req() req: any) {
+    return this.service.handleWebhook(body, req.headers);
+  }
+
+  @Get('logs')
+  @ApiBearerAuth()
+  @UseGuards(AuthGuard('jwt'), PermissionsGuard)
+  @RequirePermissions('instagram:read')
+  @ApiOperation({ summary: 'Logs dos Webhooks recebidos' })
+  getWebhookLogs() {
+    return this.service.getWebhookLogs();
   }
 
   // ============================================================
