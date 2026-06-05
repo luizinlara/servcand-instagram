@@ -9,6 +9,7 @@ export default function InstagramPage() {
   const qc = useQueryClient();
   const [selectedPersonId, setSelectedPersonId] = useState('');
   const [showPostModal, setShowPostModal] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
 
   const { data: persons = [] } = useQuery({
     queryKey: ['persons', 'active'],
@@ -39,7 +40,7 @@ export default function InstagramPage() {
 
       {/* Config Banner */}
       {(config as any)?.isActive ? (
-        <div className="card" style={{ background: 'rgba(67, 233, 123, 0.08)', borderColor: 'rgba(67, 233, 123, 0.3)', marginBottom: '1.5rem' }}>
+        <div className="card" style={{ background: 'rgba(67, 233, 123, 0.08)', borderColor: 'rgba(67, 233, 123, 0.3)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <CheckCircle size={20} style={{ color: 'var(--accent)' }} />
             <div>
@@ -49,18 +50,28 @@ export default function InstagramPage() {
               </div>
             </div>
           </div>
+          {hasPermission('instagram:manage') && (
+            <button className="btn btn-secondary btn-sm" onClick={() => setShowConfigModal(true)}>
+              Editar Configuração
+            </button>
+          )}
         </div>
       ) : (
-        <div className="card" style={{ background: 'rgba(247, 151, 30, 0.08)', borderColor: 'rgba(247, 151, 30, 0.3)', marginBottom: '1.5rem' }}>
+        <div className="card" style={{ background: 'rgba(247, 151, 30, 0.08)', borderColor: 'rgba(247, 151, 30, 0.3)', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <Instagram size={20} style={{ color: 'var(--warning)' }} />
             <div>
-              <div style={{ fontWeight: 600 }}>Webhook não configurado</div>
+              <div style={{ fontWeight: 600 }}>Webhook não configurado no sistema</div>
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Configure o Webhook do Instagram em Parâmetros para automação completa
+                Clique ao lado para cadastrar as credenciais da empresa e ativar o monitoramento automático
               </div>
             </div>
           </div>
+          {hasPermission('instagram:manage') && (
+            <button className="btn btn-primary btn-sm" onClick={() => setShowConfigModal(true)}>
+              Configurar Integração
+            </button>
+          )}
         </div>
       )}
 
@@ -137,6 +148,98 @@ export default function InstagramPage() {
           onSuccess={() => { setShowPostModal(false); qc.invalidateQueries({ queryKey: ['instagram-posts'] }); }}
         />
       )}
+
+      {showConfigModal && (
+        <ConfigModal
+          config={config}
+          onClose={() => setShowConfigModal(false)}
+          onSuccess={() => { setShowConfigModal(false); qc.invalidateQueries({ queryKey: ['instagram-config'] }); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfigModal({ config, onClose, onSuccess }: any) {
+  const [form, setForm] = useState<any>({
+    instagramAccountId: '',
+    accessToken: '',
+    webhookVerifyToken: '',
+    isActive: true,
+    ...config,
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const set = (f: string, v: any) => setForm((prev: any) => ({ ...prev, [f]: v }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      await instagramService.updateConfig(form);
+      onSuccess();
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao salvar configurações');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal">
+        <div className="modal-header">
+          <h2>Configurar Webhook do Instagram</h2>
+          <button className="btn btn-secondary btn-sm" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="modal-body">
+            <div className="form-group">
+              <label className="form-label">ID da Conta Comercial do Instagram</label>
+              <input
+                className="form-control"
+                value={form.instagramAccountId || ''}
+                onChange={(e) => set('instagramAccountId', e.target.value)}
+                placeholder="Ex: 17841400000000000"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Token de Acesso (Access Token)</label>
+              <textarea
+                className="form-control"
+                rows={3}
+                value={form.accessToken || ''}
+                onChange={(e) => set('accessToken', e.target.value)}
+                placeholder="Cole o token de acesso de longa duração do Meta"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Token de Verificação do Webhook (Verify Token)</label>
+              <input
+                className="form-control"
+                value={form.webhookVerifyToken || ''}
+                onChange={(e) => set('webhookVerifyToken', e.target.value)}
+                placeholder="Deve coincidir com o configurado no portal da Meta"
+              />
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginTop: '1rem' }}>
+                <input
+                  type="checkbox"
+                  checked={!!form.isActive}
+                  onChange={(e) => set('isActive', e.target.checked)}
+                />
+                Ativar automação do Instagram
+              </label>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="btn btn-primary" disabled={isLoading}>
+              {isLoading ? 'Salvando...' : 'Salvar Configurações'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
