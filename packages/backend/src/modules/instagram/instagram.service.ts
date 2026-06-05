@@ -38,13 +38,14 @@ export class InstagramService {
 
     if (body.object === 'instagram') {
       for (const entry of body.entry || []) {
+        const instagramAccountId = entry.id;
         for (const change of entry.changes || []) {
           if (change.field === 'mentions') {
-            await this.handleMention(change.value);
+            await this.handleMention(change.value, instagramAccountId);
           } else if (change.field === 'comments') {
-            await this.handleComment(change.value);
+            await this.handleComment(change.value, instagramAccountId);
           } else if (change.field === 'story_insights') {
-            await this.handleStoryInsight(change.value);
+            await this.handleStoryInsight(change.value, instagramAccountId);
           }
         }
       }
@@ -53,31 +54,87 @@ export class InstagramService {
     return { status: 'received' };
   }
 
-  private async handleMention(data: any) {
+  private async handleMention(data: any, instagramAccountId: string) {
     this.logger.log(`Handling mention: ${JSON.stringify(data)}`);
-    // Find person by instagram ID
-    const person = await this.prisma.person.findFirst({
-      where: { instagramId: data.mentioned_media_id || data.media_id },
+    const config = await this.prisma.instagramConfig.findFirst({
+      where: { instagramAccountId },
     });
+    if (!config || !config.accessToken) return;
 
-    if (person) {
-      await this.upsertInstagramPost(person.id, data, { hasTag: true });
+    const mediaId = data.media_id;
+    if (!mediaId) return;
+
+    const url = `https://graph.facebook.com/v19.0/${mediaId}?fields=id,username,owner,media_type,media_url,caption&access_token=${config.accessToken}`;
+    try {
+      const response = await axios.get(url);
+      const mediaData = response.data;
+      const username = mediaData.username || mediaData.owner?.username;
+      const ownerId = mediaData.owner?.id;
+
+      if (username) {
+        const person = await this.prisma.person.findFirst({
+          where: { instagramUsername: username },
+        });
+
+        if (person) {
+          if (!person.instagramId && ownerId) {
+            await this.prisma.person.update({
+              where: { id: person.id },
+              data: { instagramId: ownerId },
+            });
+            person.instagramId = ownerId;
+          }
+          await this.upsertInstagramPost(person.id, mediaData, { hasTag: true });
+        }
+      }
+    } catch (err: any) {
+      this.logger.error(`Failed to handle mention for media ${mediaId}: ${err.message}`);
     }
   }
 
-  private async handleComment(data: any) {
+  private async handleComment(data: any, instagramAccountId: string) {
     this.logger.log(`Handling comment: ${JSON.stringify(data)}`);
+    const username = data.from?.username;
+    const fromId = data.from?.id;
+    if (!username) return;
+
     const person = await this.prisma.person.findFirst({
-      where: { instagramUsername: data.from?.username },
+      where: { instagramUsername: username },
     });
 
     if (person) {
+      if (!person.instagramId && fromId) {
+        await this.prisma.person.update({
+          where: { id: person.id },
+          data: { instagramId: fromId },
+        });
+        person.instagramId = fromId;
+      }
       await this.upsertInstagramPost(person.id, data, { hasComment: true });
     }
   }
 
-  private async handleStoryInsight(data: any) {
+  private async handleStoryInsight(data: any, instagramAccountId: string) {
     this.logger.log(`Handling story insight: ${JSON.stringify(data)}`);
+  }
+
+  async checkInstagramFollowStatus(personId: string): Promise<boolean> {
+    const person = await this.prisma.person.findUnique({ where: { id: personId } });
+    if (!person || !person.instagramId) return false;
+
+    const config = await this.prisma.instagramConfig.findUnique({
+      where: { companyId: person.companyId },
+    });
+    if (!config || !config.accessToken || !config.isActive) return false;
+
+    const url = `https://graph.facebook.com/v19.0/${person.instagramId}?fields=is_user_follow_business&access_token=${config.accessToken}`;
+    try {
+      const response = await axios.get(url);
+      return !!response.data.is_user_follow_business;
+    } catch (err: any) {
+      this.logger.error(`Failed to check follow status for user ${person.instagramId}: ${err.message}`);
+      return false;
+    }
   }
 
   private async downloadAndSavePhoto(mediaUrl: string, postId: string): Promise<string> {
@@ -155,15 +212,14 @@ export class InstagramService {
     await this.autoValidateMissions(personId, postId);
   }
 
-  // Auto-validate missions based on instagram post
-  async autoValidateMissions(personId: string, postId: string) {
-    const post = await this.prisma.instagramPost.findFirst({
-      where: { instagramPostId: postId, personId },
-    });
-    if (!post) return;
-
+  // Auto-validate missions based on instagram post or follow status
+  async autoValidateMissions(personId: string, postId?: string) {
     const person = await this.prisma.person.findUnique({ where: { id: personId } });
     if (!person) return;
+
+    const post = postId ? await this.prisma.instagramPost.findFirst({
+      where: { instagramPostId: postId, personId },
+    }) : null;
 
     const missions = await this.prisma.mission.findMany({
       where: { companyId: person.companyId, isActive: true },
@@ -175,38 +231,62 @@ export class InstagramService {
 
     for (const mission of missions) {
       let shouldComplete = false;
+      let evidence = post?.mediaUrl || 'Validado via API';
 
-      if (mission.type === 'POST_PHOTO' && post.hasPhoto) shouldComplete = true;
-      if (mission.type === 'TAG_COMPANY' && post.hasTag) shouldComplete = true;
-      if (mission.type === 'COMMENT_POST' && post.hasComment) shouldComplete = true;
-      if (mission.type === 'SHARE_POST' && post.hasShare) shouldComplete = true;
+      if (post) {
+        if (mission.type === 'POST_PHOTO' && post.hasPhoto) shouldComplete = true;
+        if (mission.type === 'TAG_COMPANY' && post.hasTag) shouldComplete = true;
+        if (mission.type === 'COMMENT_POST' && post.hasComment) shouldComplete = true;
+        if (mission.type === 'SHARE_POST' && post.hasShare) shouldComplete = true;
+      }
+
+      if (mission.type === 'FOLLOW_PROFILE' && person.instagramId) {
+        const isFollowing = await this.checkInstagramFollowStatus(personId);
+        if (isFollowing) {
+          shouldComplete = true;
+          evidence = `Seguindo perfil comercial (ID: ${person.instagramId})`;
+        }
+      }
 
       if (shouldComplete) {
+        const existingPM = await this.prisma.personMission.findUnique({
+          where: {
+            personId_missionId_weekNumber_year: {
+              personId, missionId: mission.id, weekNumber, year,
+            },
+          },
+        });
+
+        const isNewCompletion = !existingPM || existingPM.status !== 'COMPLETED';
+
         await this.prisma.personMission.upsert({
           where: {
             personId_missionId_weekNumber_year: {
               personId, missionId: mission.id, weekNumber, year,
             },
           },
-          update: { status: 'COMPLETED', completedAt: now, evidence: post.mediaUrl, points: mission.points },
+          update: { status: 'COMPLETED', completedAt: now, evidence, points: mission.points },
           create: {
             personId, missionId: mission.id, weekNumber, year,
-            status: 'COMPLETED', completedAt: now, evidence: post.mediaUrl, points: mission.points,
+            status: 'COMPLETED', completedAt: now, evidence, points: mission.points,
           },
         });
 
-        await this.prisma.person.update({
-          where: { id: personId },
-          data: { totalPoints: { increment: mission.points } },
-        });
+        if (isNewCompletion) {
+          await this.prisma.person.update({
+            where: { id: personId },
+            data: { totalPoints: { increment: mission.points } },
+          });
+        }
       }
     }
 
-    // Mark post as validated
-    await this.prisma.instagramPost.updateMany({
-      where: { instagramPostId: postId, personId },
-      data: { status: 'VALIDATED', validatedAt: now },
-    });
+    if (postId) {
+      await this.prisma.instagramPost.updateMany({
+        where: { instagramPostId: postId, personId },
+        data: { status: 'VALIDATED', validatedAt: now },
+      });
+    }
   }
 
   async findPostsByPerson(personId: string, query: any = {}) {
@@ -282,6 +362,25 @@ export class InstagramService {
     });
 
     for (const pm of completedMissions) {
+      if (pm.mission.type === 'FOLLOW_PROFILE') {
+        const isFollowing = await this.checkInstagramFollowStatus(personId);
+        if (!isFollowing) {
+          await this.prisma.personMission.update({
+            where: { id: pm.id },
+            data: {
+              status: 'PENDING',
+              notes: 'Deixou de seguir o perfil comercial da empresa.',
+            },
+          });
+
+          await this.prisma.person.update({
+            where: { id: personId },
+            data: { totalPoints: { decrement: pm.points } },
+          });
+        }
+        continue;
+      }
+
       let postField: keyof any = 'hasPhoto';
       if (pm.mission.type === 'POST_PHOTO') postField = 'hasPhoto';
       else if (pm.mission.type === 'TAG_COMPANY') postField = 'hasTag';

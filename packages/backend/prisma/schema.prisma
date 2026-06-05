@@ -245,6 +245,7 @@ enum MissionType {
   COMMENT_POST        // comentar na publicação
   SHARE_POST          // compartilhar publicação
   REACH_FOLLOWERS     // atingir número de seguidores
+  FOLLOW_PROFILE      // seguir perfil da empresa
   CUSTOM              // missão customizada
 }
 
