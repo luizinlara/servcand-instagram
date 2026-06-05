@@ -1,7 +1,7 @@
 {
   "name": "@servcand/backend",
   "version": "1.0.0",
-  "description": "ServcCand Backend API - NestJS",
+  "description": "ServCand Backend API - NestJS",
   "private": true,
   "scripts": {
     "prebuild": "rimraf dist && prisma generate",

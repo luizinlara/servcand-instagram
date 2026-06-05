@@ -81,7 +81,7 @@ async function main() {
     where: { cnpj: '00.000.000/0001-00' },
     update: {},
     create: {
-      name: 'ServcCand Admin',
+      name: 'ServCand Admin',
       cnpj: '00.000.000/0001-00',
       email: 'admin@servcand.com',
       phone: '(00) 0000-0000',

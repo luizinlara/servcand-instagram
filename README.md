@@ -1,4 +1,4 @@
-# ServcCand
+# ServCand
 
 Sistema Multi-Empresa para Gestão de Funcionários com Automação Instagram e Gamificação.
 

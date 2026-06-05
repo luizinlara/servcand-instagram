@@ -76,7 +76,7 @@ export default function Sidebar() {
       <div className="sidebar-logo">
         <div className="sidebar-logo-icon">SC</div>
         <div className="sidebar-logo-text">
-          <h2>ServcCand</h2>
+          <h2>ServCand</h2>
           <span>{user?.companyName || 'Sistema'}</span>
         </div>
       </div>

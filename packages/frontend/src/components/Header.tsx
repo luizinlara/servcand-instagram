@@ -20,7 +20,7 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 export default function Header() {
   const location = useLocation();
   const { user } = useAuth();
-  const page = pageTitles[location.pathname] || { title: 'ServcCand', subtitle: '' };
+  const page = pageTitles[location.pathname] || { title: 'ServCand', subtitle: '' };
 
   return (
     <header className="header">

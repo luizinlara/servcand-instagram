@@ -1,4 +1,4 @@
-// Prisma Schema - ServcCand
+// Prisma Schema - ServCand
 // Multi-tenant company management system with Instagram gamification
 
 generator client {

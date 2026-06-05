@@ -55,7 +55,7 @@ export async function bootstrap() {
 
   // Swagger documentation
   const config = new DocumentBuilder()
-    .setTitle('ServcCand API')
+    .setTitle('ServCand API')
     .setDescription('Sistema Multi-Empresa de Gestão de Funcionários e Automação Instagram')
     .setVersion('1.0')
     .addBearerAuth()
