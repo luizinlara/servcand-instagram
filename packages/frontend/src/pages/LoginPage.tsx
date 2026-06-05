@@ -27,7 +27,7 @@ export default function LoginPage() {
         <div className="login-logo">
           <div className="login-logo-icon">SC</div>
           <h1>ServcCand</h1>
-          <p>Sistema de Gestão Multi-Empresa</p>
+          {/* <p>Sistema de Gestão Multi-Empresa</p> */}
         </div>
 
         <form onSubmit={handleSubmit}>
