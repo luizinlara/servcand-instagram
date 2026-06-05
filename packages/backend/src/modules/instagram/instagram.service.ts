@@ -180,6 +180,12 @@ export class InstagramService {
       localMediaUrl = await this.downloadAndSavePhoto(localMediaUrl, postId);
     }
 
+    const caption = data.caption || '';
+    const isRepost = caption.toLowerCase().includes('repost') || caption.toLowerCase().includes('#repost');
+    const isStory = data.media_type === 'STORY' || !!data.story_id;
+    const hasPhoto = data.media_type === 'IMAGE' || data.media_type === 'CAROUSEL_ALBUM';
+    const hasVideo = data.media_type === 'VIDEO';
+
     const existing = await this.prisma.instagramPost.findFirst({
       where: { instagramPostId: postId, personId },
     });
@@ -190,6 +196,11 @@ export class InstagramService {
         data: {
           ...updates,
           mediaUrl: localMediaUrl || existing.mediaUrl,
+          caption: caption || existing.caption,
+          isRepost: isRepost || existing.isRepost,
+          isStory: isStory || existing.isStory,
+          hasPhoto: hasPhoto || existing.hasPhoto,
+          hasVideo: hasVideo || existing.hasVideo,
           status: 'VALIDATING',
         },
       });
@@ -201,7 +212,11 @@ export class InstagramService {
           timestamp: new Date(),
           rawData: data,
           status: 'VALIDATING',
-          hasPhoto: true,
+          caption,
+          isRepost,
+          isStory,
+          hasPhoto,
+          hasVideo,
           mediaUrl: localMediaUrl,
           ...updates,
         },
@@ -234,10 +249,14 @@ export class InstagramService {
       let evidence = post?.mediaUrl || 'Validado via API';
 
       if (post) {
-        if (mission.type === 'POST_PHOTO' && post.hasPhoto) shouldComplete = true;
+        if (mission.type === 'POST_PHOTO' && post.hasPhoto && !post.isStory && !post.isRepost) shouldComplete = true;
+        if (mission.type === 'POST_VIDEO' && post.hasVideo && !post.isStory && !post.isRepost) shouldComplete = true;
+        if (mission.type === 'REPOST_STORY' && post.isStory) shouldComplete = true;
+        if (mission.type === 'REPOST_POST' && post.isRepost && !post.isStory) shouldComplete = true;
         if (mission.type === 'TAG_COMPANY' && post.hasTag) shouldComplete = true;
         if (mission.type === 'COMMENT_POST' && post.hasComment) shouldComplete = true;
         if (mission.type === 'SHARE_POST' && post.hasShare) shouldComplete = true;
+        if (mission.type === 'LIKE_POST' && post.hasLike) shouldComplete = true;
       }
 
       if (mission.type === 'FOLLOW_PROFILE' && person.instagramId) {
@@ -383,9 +402,13 @@ export class InstagramService {
 
       let postField: keyof any = 'hasPhoto';
       if (pm.mission.type === 'POST_PHOTO') postField = 'hasPhoto';
+      else if (pm.mission.type === 'POST_VIDEO') postField = 'hasVideo';
+      else if (pm.mission.type === 'REPOST_STORY') postField = 'isStory';
+      else if (pm.mission.type === 'REPOST_POST') postField = 'isRepost';
       else if (pm.mission.type === 'TAG_COMPANY') postField = 'hasTag';
       else if (pm.mission.type === 'COMMENT_POST') postField = 'hasComment';
       else if (pm.mission.type === 'SHARE_POST') postField = 'hasShare';
+      else if (pm.mission.type === 'LIKE_POST') postField = 'hasLike';
 
       const post = await this.prisma.instagramPost.findFirst({
         where: {
@@ -418,13 +441,23 @@ export class InstagramService {
           localMediaUrl = await this.downloadAndSavePhoto(localMediaUrl, post.instagramPostId);
         }
 
+        const caption = metaData.caption || '';
+        const isRepost = caption.toLowerCase().includes('repost') || caption.toLowerCase().includes('#repost');
+        const isStory = metaData.media_type === 'STORY';
+        const hasPhoto = metaData.media_type === 'IMAGE' || metaData.media_type === 'CAROUSEL_ALBUM';
+        const hasVideo = metaData.media_type === 'VIDEO';
+
         await this.prisma.instagramPost.update({
           where: { id: post.id },
           data: {
             status: 'VALIDATED',
             rawData: metaData,
             mediaUrl: localMediaUrl,
-            caption: metaData.caption || post.caption,
+            caption: caption || post.caption,
+            isRepost: isRepost || post.isRepost,
+            isStory: isStory || post.isStory,
+            hasPhoto: hasPhoto || post.hasPhoto,
+            hasVideo: hasVideo || post.hasVideo,
           },
         });
 

@@ -241,9 +241,13 @@ model Person {
 
 enum MissionType {
   POST_PHOTO          // publicar foto
+  POST_VIDEO          // publicar vídeo
+  REPOST_STORY        // repostar story da empresa
+  REPOST_POST         // repostar publicação da empresa
   TAG_COMPANY         // marcar a empresa
   COMMENT_POST        // comentar na publicação
   SHARE_POST          // compartilhar publicação
+  LIKE_POST           // curtir publicação
   REACH_FOLLOWERS     // atingir número de seguidores
   FOLLOW_PROFILE      // seguir perfil da empresa
   CUSTOM              // missão customizada
@@ -338,9 +342,13 @@ model InstagramPost {
 
   // Validações
   hasPhoto        Boolean  @default(false)
+  hasVideo        Boolean  @default(false)
+  isStory         Boolean  @default(false)
+  isRepost        Boolean  @default(false)
   hasTag          Boolean  @default(false)  // marcou a empresa
   hasComment      Boolean  @default(false)  // comentou
   hasShare        Boolean  @default(false)  // compartilhou
+  hasLike         Boolean  @default(false)  // curtiu
   likesCount      Int      @default(0)
   commentsCount   Int      @default(0)
 
