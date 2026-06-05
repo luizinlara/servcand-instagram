@@ -1,11 +1,15 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { MissionsService } from './missions.service';
-import { CreateMissionDto, UpdateMissionDto, ValidateMissionDto } from './dto/mission.dto';
+import { CreateMissionDto, UpdateMissionDto, ValidateMissionDto, SubmitEvidenceDto } from './dto/mission.dto';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 
 @ApiTags('Missions')
 @ApiBearerAuth()
@@ -65,6 +69,51 @@ export class MissionsController {
   @ApiOperation({ summary: 'Atualizar missão' })
   update(@Param('id') id: string, @Body() dto: UpdateMissionDto) {
     return this.service.update(id, dto);
+  }
+
+  @Post('submit-evidence')
+  @RequirePermissions('missions:read')
+  @ApiOperation({ summary: 'Enviar comprovante (print) para validação manual de uma missão' })
+  submitEvidence(@Body() dto: SubmitEvidenceDto, @CurrentUser() user: any) {
+    return this.service.submitEvidence(dto, user);
+  }
+
+  @Post('upload-evidence')
+  @RequirePermissions('missions:read')
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dir = join(process.cwd(), 'uploads', 'evidences');
+        if (!existsSync(dir)) {
+          mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = extname(file.originalname);
+        cb(null, `${uniqueSuffix}${ext}`);
+      },
+    }),
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+        return cb(new BadRequestException('Somente imagens JPG, JPEG e PNG são permitidas'), false);
+      }
+      cb(null, true);
+    },
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB
+    }
+  }))
+  @ApiOperation({ summary: 'Fazer upload de comprovante de missão (print)' })
+  uploadEvidenceFile(@UploadedFile() file: any) {
+    if (!file) {
+      throw new BadRequestException('O arquivo é obrigatório');
+    }
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:3000';
+    return {
+      url: `${backendUrl}/uploads/evidences/${file.filename}`
+    };
   }
 
   @Delete(':id')

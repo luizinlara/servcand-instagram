@@ -5,8 +5,8 @@ export class CreateMissionDto {
   @ApiProperty() @IsString() @IsNotEmpty() companyId: string;
   @ApiProperty() @IsString() @IsNotEmpty() name: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() description?: string;
-  @ApiProperty({ enum: ['POST_PHOTO', 'TAG_COMPANY', 'COMMENT_POST', 'SHARE_POST', 'REACH_FOLLOWERS', 'CUSTOM'] })
-  @IsEnum(['POST_PHOTO', 'TAG_COMPANY', 'COMMENT_POST', 'SHARE_POST', 'REACH_FOLLOWERS', 'CUSTOM'])
+  @ApiProperty({ enum: ['POST_PHOTO', 'POST_VIDEO', 'REPOST_STORY', 'REPOST_POST', 'TAG_COMPANY', 'COMMENT_POST', 'SHARE_POST', 'LIKE_POST', 'REACH_FOLLOWERS', 'FOLLOW_PROFILE', 'CUSTOM'] })
+  @IsEnum(['POST_PHOTO', 'POST_VIDEO', 'REPOST_STORY', 'REPOST_POST', 'TAG_COMPANY', 'COMMENT_POST', 'SHARE_POST', 'LIKE_POST', 'REACH_FOLLOWERS', 'FOLLOW_PROFILE', 'CUSTOM'])
   type: string;
   @ApiProperty({ default: 10 }) @IsOptional() @IsInt() points?: number;
   @ApiProperty({ default: 0.00 }) @IsOptional() @IsNumber() rewardValue?: number;
@@ -31,5 +31,13 @@ export class ValidateMissionDto {
   @ApiProperty() @IsInt() weekNumber: number;
   @ApiProperty() @IsInt() year: number;
   @ApiProperty({ required: false }) @IsOptional() @IsString() evidence?: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() notes?: string;
+}
+
+export class SubmitEvidenceDto {
+  @ApiProperty() @IsString() @IsNotEmpty() missionId: string;
+  @ApiProperty() @IsInt() weekNumber: number;
+  @ApiProperty() @IsInt() year: number;
+  @ApiProperty() @IsString() @IsNotEmpty() evidenceUrl: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() notes?: string;
 }

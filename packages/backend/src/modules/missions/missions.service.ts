@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateMissionDto, UpdateMissionDto, ValidateMissionDto } from './dto/mission.dto';
+import { CreateMissionDto, UpdateMissionDto, ValidateMissionDto, SubmitEvidenceDto } from './dto/mission.dto';
 
 @Injectable()
 export class MissionsService {
@@ -146,6 +146,62 @@ export class MissionsService {
       where,
       include: { mission: true },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async submitEvidence(dto: SubmitEvidenceDto, user: any) {
+    const dbUser = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
+    if (!dbUser || !dbUser.personId) {
+      throw new NotFoundException('Usuário não associado a um funcionário (Person)');
+    }
+
+    const mission = await this.prisma.mission.findUnique({ where: { id: dto.missionId } });
+    if (!mission) throw new NotFoundException('Mission not found');
+
+    const existing = await this.prisma.personMission.findUnique({
+      where: {
+        personId_missionId_weekNumber_year: {
+          personId: dbUser.personId,
+          missionId: dto.missionId,
+          weekNumber: dto.weekNumber,
+          year: dto.year,
+        },
+      },
+    });
+
+    if (existing) {
+      // Se já estava com pontos validados e volta a pendente, descontamos para revalidação manual
+      if (existing.status === 'COMPLETED') {
+        await this.prisma.person.update({
+          where: { id: dbUser.personId },
+          data: { totalPoints: { decrement: existing.points } },
+        });
+      }
+
+      return this.prisma.personMission.update({
+        where: { id: existing.id },
+        data: {
+          status: 'PENDING',
+          completedAt: null,
+          evidence: dto.evidenceUrl,
+          notes: dto.notes,
+        },
+      });
+    }
+
+    return this.prisma.personMission.create({
+      data: {
+        personId: dbUser.personId,
+        missionId: dto.missionId,
+        weekNumber: dto.weekNumber,
+        year: dto.year,
+        status: 'PENDING',
+        evidence: dto.evidenceUrl,
+        notes: dto.notes,
+        points: mission.points,
+      },
     });
   }
 
