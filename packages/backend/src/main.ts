@@ -22,6 +22,7 @@ export async function bootstrap() {
   const allowedOrigins = [
     'https://www.servcand.com.br',
     'https://servcand.com.br',
+    'https://api.servcand.com.br',
     process.env.FRONTEND_URL
   ].filter(Boolean);
 
