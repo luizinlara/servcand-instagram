@@ -20,12 +20,16 @@ export async function bootstrap() {
   // Global prefix
   app.setGlobalPrefix('api');
 
-  // Serve static uploads
-  const uploadsDir = join(process.cwd(), 'uploads');
-  if (!existsSync(uploadsDir)) {
-    mkdirSync(uploadsDir, { recursive: true });
+  // Serve static uploads (resilient to read-only filesystems like Vercel)
+  try {
+    const uploadsDir = join(process.cwd(), 'uploads');
+    if (!existsSync(uploadsDir)) {
+      mkdirSync(uploadsDir, { recursive: true });
+    }
+    app.use('/uploads', express.static(uploadsDir));
+  } catch (err: any) {
+    logger.warn(`Could not initialize static uploads directory (expected on Vercel): ${err.message}`);
   }
-  app.use('/uploads', express.static(uploadsDir));
 
   // CORS
   const allowedOrigins = [
