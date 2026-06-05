@@ -329,7 +329,7 @@ async function main() {
     });
   }
 
-  await prisma.profile.upsert({
+  const sampleLeaderProfile = await prisma.profile.upsert({
     where: { companyId_name: { companyId: sampleCompany.id, name: 'LEADER' } },
     update: {},
     create: {
@@ -340,7 +340,15 @@ async function main() {
     },
   });
 
-  await prisma.profile.upsert({
+  for (const permissionId of leaderPermissions) {
+    await prisma.profilePermission.upsert({
+      where: { profileId_permissionId: { profileId: sampleLeaderProfile.id, permissionId } },
+      update: {},
+      create: { profileId: sampleLeaderProfile.id, permissionId },
+    });
+  }
+
+  const sampleEmployeeProfile = await prisma.profile.upsert({
     where: { companyId_name: { companyId: sampleCompany.id, name: 'EMPLOYEE' } },
     update: {},
     create: {
@@ -350,6 +358,14 @@ async function main() {
       isSystem: true,
     },
   });
+
+  for (const permissionId of employeePermissions) {
+    await prisma.profilePermission.upsert({
+      where: { profileId_permissionId: { profileId: sampleEmployeeProfile.id, permissionId } },
+      update: {},
+      create: { profileId: sampleEmployeeProfile.id, permissionId },
+    });
+  }
 
   // Create user for sample company
   const sampleUserPassword = await bcrypt.hash('Empresa@123', 12);
@@ -415,9 +431,6 @@ async function main() {
     where: { companyId: sampleCompany.id, name: 'Centro' },
   });
 
-  const sampleEmployeeProfile = await prisma.profile.findFirst({
-    where: { companyId: sampleCompany.id, name: 'EMPLOYEE' },
-  });
 
   const luisPerson = await prisma.person.upsert({
     where: { cpf: '05479486110' },
